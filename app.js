@@ -109,7 +109,6 @@ let selectedDate = todayISO();
 let reviewCalendarMonth = selectedDate.slice(0, 7);
 let currentView = "dashboard";
 let todayMode = "list";
-let renderTimer;
 let toastTimer = 0;
 let busyTimer = 0;
 let busyToken = 0;
@@ -217,11 +216,6 @@ function normalizeState(next) {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function scheduleRender() {
-  clearTimeout(renderTimer);
-  renderTimer = setTimeout(render, 800);
 }
 
 function delay(ms) {
@@ -714,7 +708,6 @@ function patchLoop(taskId, key, value, shouldRender = true, date = selectedDate)
   state.tasksByDate[date] = tasks;
   saveState();
   if (shouldRender) render();
-  else scheduleRender();
 }
 
 function deleteTask(taskId, date = selectedDate) {
@@ -1522,6 +1515,7 @@ function bindEvents() {
     });
     card.querySelectorAll("[data-loop-key]").forEach((field) => {
       field.addEventListener("input", (event) => patchLoop(taskId, field.dataset.loopKey, event.target.value, false, taskDate));
+      field.addEventListener("change", (event) => patchLoop(taskId, field.dataset.loopKey, event.target.value, true, taskDate));
     });
     card.querySelectorAll("[data-action='toggle-tag']").forEach((field) => {
       field.addEventListener("change", (event) => toggleTag(taskId, field.value, event.target.checked, taskDate));
