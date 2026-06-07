@@ -1,0 +1,16 @@
+{
+  "name": "kaoyan-loop-recorder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "考研倒计时闭环记录器桌面应用",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:mac": "tauri build --bundles app,dmg",
+    "build:mac:universal": "tauri build --target universal-apple-darwin --bundles app,dmg"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
