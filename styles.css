@@ -25,6 +25,8 @@ body {
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   line-height: 1.5;
+  min-width: 360px;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -40,8 +42,8 @@ button {
   background: var(--panel);
   color: var(--ink);
   cursor: pointer;
-  min-height: 40px;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 10px 14px;
   transition:
     transform 120ms ease,
     box-shadow 120ms ease,
@@ -93,8 +95,9 @@ textarea {
   border-radius: 8px;
   background: #fff;
   color: var(--ink);
-  padding: 9px 10px;
-  min-height: 40px;
+  padding: 11px 12px;
+  min-height: 44px;
+  font-size: 16px;
 }
 
 textarea {
@@ -116,7 +119,7 @@ label {
 }
 
 .shell {
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 .topbar {
@@ -157,6 +160,7 @@ label {
   border-radius: 8px;
   background: rgba(246, 247, 244, 0.92);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .nav-item {
@@ -527,6 +531,8 @@ label {
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   margin: 0 0 16px;
   padding: 4px;
 }
@@ -831,22 +837,28 @@ label {
 
 @media (max-width: 620px) {
   .app {
-    padding: 14px 14px 88px;
+    width: 100%;
+    padding: 14px 12px calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .brand h1 {
+    font-size: 24px;
+    line-height: 1.2;
   }
 
   .nav {
     position: fixed;
     top: auto;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 8px;
     margin: 0;
     padding: 6px;
     box-shadow: var(--shadow);
   }
 
   .nav-item {
-    min-height: 44px;
+    min-height: 52px;
     padding: 6px 4px;
     font-size: 12px;
   }
@@ -885,13 +897,13 @@ label {
 
   .fab {
     right: 18px;
-    bottom: 78px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
   }
 
   .toast-stack {
     top: auto;
     right: 12px;
-    bottom: 80px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
     left: 12px;
     width: auto;
   }
@@ -902,5 +914,36 @@ label {
 
   .modal-actions button {
     width: 100%;
+  }
+
+  .month-calendar-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .month-weekdays,
+  .month-calendar {
+    grid-template-columns: repeat(7, 42px);
+    min-width: max-content;
+  }
+
+  .month-day,
+  .calendar-day {
+    min-height: 46px;
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 380px) {
+  .app {
+    padding-inline: 10px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .nav-item {
+    font-size: 11px;
   }
 }
