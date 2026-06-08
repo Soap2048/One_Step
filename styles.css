@@ -34,6 +34,7 @@ input,
 select,
 textarea {
   font: inherit;
+  max-width: 100%;
 }
 
 button {
@@ -91,6 +92,7 @@ input,
 select,
 textarea {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -110,6 +112,7 @@ label {
   gap: 6px;
   color: var(--muted);
   font-size: 13px;
+  min-width: 0;
 }
 
 .app {
@@ -287,6 +290,10 @@ label {
   gap: 12px;
 }
 
+.form-grid > * {
+  min-width: 0;
+}
+
 .form-grid .wide,
 .wide {
   grid-column: 1 / -1;
@@ -298,14 +305,22 @@ label {
   display: flex;
   gap: 8px;
   align-items: end;
+  min-width: 0;
 }
 
 .stage-row input:first-child {
   flex: 1;
+  min-width: 0;
 }
 
 .stage-row input:last-child {
+  flex: 0 1 170px;
   max-width: 170px;
+}
+
+.settings-basic-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .secret-row {
@@ -884,7 +899,20 @@ label {
   }
 
   .stage-row input:last-child {
+    width: 100%;
+    flex-basis: auto;
     max-width: none;
+  }
+
+  input[type="date"] {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settings-basic-actions button,
+  .settings-actions button {
+    width: 100%;
   }
 
   .actions button {

@@ -948,6 +948,9 @@ function renderSettingsView() {
         <label class="wide">科目
           <textarea name="subjects">${escapeHTML(state.settings.subjects.join("，"))}</textarea>
         </label>
+        <div class="settings-basic-actions wide">
+          <button class="primary" type="submit" ${buttonDisabled("saveSettings")} data-loading="${isLoading("saveSettings")}">${buttonText("saveSettings", "确认基础设置", "保存中…")}</button>
+        </div>
         <label>复盘周期
           <select name="reviewCycle" data-review-cycle-select>
             ${renderReviewCycleOptions()}
@@ -998,7 +1001,7 @@ function renderSettingsView() {
             <p class="form-help wide">${escapeHTML(providerHint)}</p>
             <div class="settings-actions wide">
               <button type="button" data-action="test-ai-connection" ${buttonDisabled("testAiConnection")} data-loading="${isLoading("testAiConnection")}">${buttonText("testAiConnection", "测试连接", "测试中…")}</button>
-              <button class="primary" type="submit" ${buttonDisabled("saveSettings")} data-loading="${isLoading("saveSettings")}">${buttonText("saveSettings", "保存 AI 设置", "保存中…")}</button>
+              <button class="primary" type="submit" ${buttonDisabled("saveSettings")} data-loading="${isLoading("saveSettings")}">${buttonText("saveSettings", "保存全部设置", "保存中…")}</button>
             </div>
           </div>
         </div>
