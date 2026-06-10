@@ -755,7 +755,7 @@ function render() {
     <main class="app shell">
       <header class="topbar">
         <div class="brand">
-          <h1>考研倒计时闭环记录器</h1>
+          <h1>ONE STEP</h1>
           <p>今天 ${today} · 评级 <span class="rating">${metrics.rating}</span></p>
         </div>
       </header>

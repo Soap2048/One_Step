@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "考研倒计时闭环记录器",
+  "productName": "ONE STEP",
   "version": "0.1.0",
   "identifier": "com.local.kaoyan-loop-recorder",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "考研倒计时闭环记录器",
+        "title": "ONE STEP",
         "width": 1180,
         "height": 820,
         "minWidth": 390,

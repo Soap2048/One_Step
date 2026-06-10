@@ -7,8 +7,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icons/pwa-192x192.png", "icons/pwa-512x512.png"],
       manifest: {
-        name: "考研闭环记录器",
-        short_name: "闭环记录",
+        name: "ONE STEP",
+        short_name: "ONE STEP",
         display: "standalone",
         start_url: "/",
         scope: "/",
