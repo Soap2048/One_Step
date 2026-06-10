@@ -299,7 +299,6 @@ label {
   grid-column: 1 / -1;
 }
 
-.stage-row,
 .tag-row,
 .inline-row {
   display: flex;
@@ -308,14 +307,20 @@ label {
   min-width: 0;
 }
 
-.stage-row input:first-child {
-  flex: 1;
+.stage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 180px) auto;
+  gap: 8px;
+  align-items: end;
   min-width: 0;
 }
 
-.stage-row input:last-child {
-  flex: 0 1 170px;
-  max-width: 170px;
+.stage-row > * {
+  min-width: 0;
+}
+
+.stage-row button {
+  white-space: nowrap;
 }
 
 .settings-basic-actions {
@@ -891,17 +896,19 @@ label {
     gap: 8px;
   }
 
-  .stage-row,
   .tag-row,
   .inline-row {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .stage-row input:last-child {
+  .stage-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .stage-row button {
     width: 100%;
-    flex-basis: auto;
-    max-width: none;
   }
 
   input[type="date"] {
