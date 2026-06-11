@@ -220,9 +220,8 @@ label {
 }
 
 .today-list {
-  position: relative;
-  min-height: 360px;
-  padding-bottom: 84px;
+  display: grid;
+  gap: 16px;
 }
 
 .fab {
@@ -368,18 +367,20 @@ label {
 
 .task-head {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: start;
+  align-items: center;
 }
 
 .task-title {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
 .task-title strong {
   font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .meta {
@@ -391,7 +392,129 @@ label {
   width: 22px;
   height: 22px;
   accent-color: var(--accent);
-  margin-top: 2px;
+  margin: 0;
+}
+
+.today-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.7fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.today-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quick-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.today-task-list {
+  margin-bottom: 2px;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.task-actions button {
+  min-height: 38px;
+  padding: 7px 10px;
+}
+
+.today-record-form {
+  display: grid;
+  gap: 16px;
+}
+
+.today-section {
+  display: grid;
+  gap: 10px;
+}
+
+.today-section h3 {
+  margin: 0;
+}
+
+.rating-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rating-card {
+  position: relative;
+  min-height: 92px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(32, 35, 31, 0.04);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    border-color 120ms ease;
+}
+
+.rating-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(32, 35, 31, 0.12);
+}
+
+.rating-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rating-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.rating-card span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.rating-card.active {
+  outline: 3px solid rgba(32, 35, 31, 0.18);
+  outline-offset: 2px;
+  box-shadow: 0 10px 24px rgba(32, 35, 31, 0.16);
+}
+
+.fold-toggle {
+  width: fit-content;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.effective-record-body {
+  display: none;
+  gap: 8px;
+}
+
+.effective-record.is-open .effective-record-body {
+  display: grid;
+}
+
+.today-save {
+  justify-self: stretch;
 }
 
 .loop {
@@ -665,6 +788,13 @@ label {
   margin: 10px 0;
 }
 
+.day-note-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .day-loop-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -841,7 +971,8 @@ label {
 
 @media (max-width: 900px) {
   .grid,
-  .stats {
+  .stats,
+  .today-overview {
     grid-template-columns: 1fr;
   }
 
@@ -887,13 +1018,29 @@ label {
   .loop-grid,
   .review-controls,
   .day-loop-grid,
+  .day-note-list,
   .task-head,
   .review-row {
     grid-template-columns: 1fr;
   }
 
+  .today-stats,
+  .quick-add,
+  .rating-picker {
+    grid-template-columns: 1fr;
+  }
+
   .task-head {
     gap: 8px;
+  }
+
+  .task-actions,
+  .quick-add button {
+    width: 100%;
+  }
+
+  .task-actions button {
+    flex: 1;
   }
 
   .tag-row,

@@ -1,5 +1,4 @@
 const STORAGE_KEY = "kaoyan-loop-recorder-v1";
-const DEFAULT_TAGS = ["概念不清", "记忆不牢", "计算失误", "推导跳步", "题型不熟", "粗心", "其他"];
 
 const formatDate = (date) => {
   const year = date.getFullYear();
@@ -101,6 +100,7 @@ const createState = () => ({
     reviewCycle: "7",
   },
   tasksByDate: {},
+  dailyRecords: {},
   aiReviews: [],
 });
 
@@ -108,7 +108,6 @@ let state = loadState();
 let selectedDate = todayISO();
 let reviewCalendarMonth = selectedDate.slice(0, 7);
 let currentView = "dashboard";
-let todayMode = "list";
 let toastTimer = 0;
 let busyTimer = 0;
 let busyToken = 0;
@@ -118,7 +117,16 @@ let uiState = {
   toasts: [],
   confirm: null,
   showAiKey: false,
+  editingTaskId: null,
+  showEffectiveRecord: false,
 };
+
+const RATING_OPTIONS = [
+  { value: "A", label: "全部或超额完成" },
+  { value: "B", label: "基本完成" },
+  { value: "C", label: "完成较少" },
+  { value: "D", label: "没有明显推进" },
+];
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "首页" },
@@ -210,6 +218,7 @@ function normalizeState(next) {
       aiApi: normalizeAiApi(next.settings?.aiApi && typeof next.settings.aiApi === "object" ? next.settings.aiApi : base.settings.aiApi),
     },
     tasksByDate: next.tasksByDate && typeof next.tasksByDate === "object" ? next.tasksByDate : {},
+    dailyRecords: next.dailyRecords && typeof next.dailyRecords === "object" ? next.dailyRecords : {},
     aiReviews: Array.isArray(next.aiReviews) ? next.aiReviews : [],
   };
 }
@@ -277,8 +286,24 @@ function setTasks(date, tasks) {
   render();
 }
 
-function allTags() {
-  return [...new Set([...DEFAULT_TAGS, ...state.settings.customTags.filter(Boolean)])];
+function dayRecord(date) {
+  return state.dailyRecords?.[date] || {};
+}
+
+function setDayRecord(date, patch, shouldRender = true) {
+  state.dailyRecords = state.dailyRecords || {};
+  state.dailyRecords[date] = {
+    ...(state.dailyRecords[date] || {}),
+    ...patch,
+    date,
+    updatedAt: new Date().toISOString(),
+  };
+  saveState();
+  if (shouldRender) render();
+}
+
+function isValidRating(value) {
+  return RATING_OPTIONS.some((option) => option.value === value);
 }
 
 function isCompleteLoop(task) {
@@ -291,11 +316,24 @@ function dayMetrics(date) {
   const done = tasks.filter((task) => task.done).length;
   const loops = tasks.filter(isCompleteLoop).length;
   const rate = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-  let rating = "D";
-  if (loops >= 2) rating = "A";
-  else if (loops === 1) rating = "B";
-  else if (done > 0) rating = "C";
+  const savedRating = dayRecord(date).rating;
+  let rating = isValidRating(savedRating) ? savedRating : "D";
+  if (!isValidRating(savedRating)) {
+    if (loops >= 2) rating = "A";
+    else if (loops === 1) rating = "B";
+    else if (done > 0) rating = "C";
+  }
   return { total: tasks.length, done, loops, rate, rating };
+}
+
+function hasDayRecord(date) {
+  const record = dayRecord(date);
+  return Boolean(
+    tasksFor(date).length ||
+      isValidRating(record.rating) ||
+      String(record.todaySentence || "").trim() ||
+      String(record.effectiveRecord || "").trim(),
+  );
 }
 
 function currentStage(date) {
@@ -374,16 +412,23 @@ function cycleReview(date) {
   let totalTasks = 0;
   let doneTasks = 0;
   let loopCount = 0;
+  let recordedDays = 0;
+  let sentenceCount = 0;
+  let effectiveRecordCount = 0;
   const tagCounts = {};
   const unfinished = [];
 
   const calendarDays = days.map((day) => {
     const metrics = dayMetrics(day);
-    const hasRecord = metrics.total > 0;
+    const hasRecord = hasDayRecord(day);
+    const record = dayRecord(day);
     ratingCounts[metrics.rating] += 1;
     totalTasks += metrics.total;
     doneTasks += metrics.done;
     loopCount += metrics.loops;
+    if (hasRecord) recordedDays += 1;
+    if (String(record.todaySentence || "").trim()) sentenceCount += 1;
+    if (String(record.effectiveRecord || "").trim()) effectiveRecordCount += 1;
     for (const task of tasksFor(day)) {
       for (const tag of task.errorTags || []) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
       if (!task.done) unfinished.push(`${day} · ${task.subject || "未分科"} · ${task.name || "未命名任务"}`);
@@ -396,7 +441,21 @@ function cycleReview(date) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([tag, count]) => `${tag} × ${count}`);
-  return { days, calendarDays, cycleDays, cycle, cycleLabel: reviewCycleLabel(cycle), rate, loopCount, ratingCounts, hotTags, unfinished };
+  return {
+    days,
+    calendarDays,
+    cycleDays,
+    cycle,
+    cycleLabel: reviewCycleLabel(cycle),
+    rate,
+    loopCount,
+    recordedDays,
+    sentenceCount,
+    effectiveRecordCount,
+    ratingCounts,
+    hotTags,
+    unfinished,
+  };
 }
 
 function recentWeekReviewData(cutoffDate = selectedDate) {
@@ -417,6 +476,7 @@ function recentWeekReviewData(cutoffDate = selectedDate) {
     const metrics = dayMetrics(date);
     const dayOutputs = [];
     const dayNotes = [];
+    const record = dayRecord(date);
 
     for (const task of tasks) {
       const loop = task.loop || {};
@@ -435,7 +495,7 @@ function recentWeekReviewData(cutoffDate = selectedDate) {
     days.push({
       date,
       dDay: dLabel(date),
-      rating: tasks.length ? metrics.rating : "无记录",
+      rating: hasDayRecord(date) ? metrics.rating : "无记录",
       completionRate: metrics.rate,
       taskCount: metrics.total,
       doneCount: metrics.done,
@@ -443,6 +503,8 @@ function recentWeekReviewData(cutoffDate = selectedDate) {
       outputCount: dayOutputs.length,
       outputs: dayOutputs,
       notes: dayNotes,
+      todaySentence: record.todaySentence || "",
+      effectiveRecord: record.effectiveRecord || "",
     });
   }
 
@@ -696,18 +758,33 @@ function addTask(form, date = todayISO()) {
   return true;
 }
 
+function saveTodayRecord(form, date = todayISO()) {
+  const data = new FormData(form);
+  const rating = String(data.get("rating") || dayRecord(date).rating || "").trim();
+  setDayRecord(date, {
+    rating: isValidRating(rating) ? rating : "",
+    todaySentence: String(data.get("todaySentence") || "").trim(),
+    effectiveRecord: String(data.get("effectiveRecord") || "").trim(),
+  });
+  pushToast("今日记录已完成", "success");
+  return true;
+}
+
 function patchTask(taskId, patch, date = selectedDate) {
   const tasks = tasksFor(date).map((task) => (task.id === taskId ? { ...task, ...patch } : task));
   setTasks(date, tasks);
 }
 
-function patchLoop(taskId, key, value, shouldRender = true, date = selectedDate) {
-  const tasks = tasksFor(date).map((task) =>
-    task.id === taskId ? { ...task, loop: { ...(task.loop || {}), [key]: value } } : task,
-  );
-  state.tasksByDate[date] = tasks;
-  saveState();
-  if (shouldRender) render();
+function renameTask(taskId, name, date = selectedDate) {
+  const nextName = String(name || "").trim();
+  if (!nextName) {
+    pushToast("任务名称不能为空", "error");
+    return false;
+  }
+  patchTask(taskId, { name: nextName }, date);
+  uiState.editingTaskId = null;
+  pushToast("任务已更新", "success");
+  return true;
 }
 
 function deleteTask(taskId, date = selectedDate) {
@@ -716,17 +793,6 @@ function deleteTask(taskId, date = selectedDate) {
     tasksFor(date).filter((task) => task.id !== taskId),
   );
   pushToast("已删除任务", "success");
-}
-
-function toggleTag(taskId, tag, checked, date = selectedDate) {
-  const tasks = tasksFor(date).map((task) => {
-    if (task.id !== taskId) return task;
-    const existing = new Set(task.errorTags || []);
-    if (checked) existing.add(tag);
-    else existing.delete(tag);
-    return { ...task, errorTags: [...existing] };
-  });
-  setTasks(date, tasks);
 }
 
 function addCustomTag(value) {
@@ -831,44 +897,52 @@ function renderDashboardView() {
 
 function renderTodayView() {
   const today = todayISO();
-  if (todayMode === "add") {
-    return `
-      <section class="panel today-add">
-        <div class="view-head">
-          <div>
-            <h2>添加任务</h2>
-            <p class="meta">任务会添加到今天：${today}</p>
-          </div>
-          <button type="button" data-action="show-task-list">返回列表</button>
-        </div>
-        <form data-task-form class="form-grid">
-          <label>科目
-            <select name="subject">
-              ${state.settings.subjects.map((subject) => `<option value="${escapeAttr(subject)}">${escapeHTML(subject)}</option>`).join("")}
-            </select>
-          </label>
-          <label class="wide">任务名
-            <input name="name" placeholder="例如：英语阅读精读 2 篇" required />
-          </label>
-          <label class="wide">备注
-            <textarea name="note" placeholder="可写资料、页码、题号或目标"></textarea>
-          </label>
-          <button class="primary wide" type="submit" ${buttonDisabled("addTask")} data-loading="${isLoading("addTask")}">${buttonText("addTask", "添加每日任务", "添加中…")}</button>
-        </form>
-      </section>
-    `;
-  }
+  const metrics = dayMetrics(today);
+  const record = dayRecord(today);
+  const effectiveRecord = String(record.effectiveRecord || "");
+  const showEffectiveRecord = uiState.showEffectiveRecord || Boolean(effectiveRecord.trim());
 
   return `
     <section class="panel today-list">
-      <div class="view-head">
+      <div class="today-overview">
         <div>
-          <h2>今日任务</h2>
+          <h2>每日记录</h2>
           <p class="meta">${today}</p>
         </div>
+        <section class="today-stats" aria-label="今日概览">
+          ${stat("已完成", `${metrics.done}/${metrics.total}`)}
+          ${stat("完成等级", metrics.rating)}
+        </section>
       </div>
-      <div class="list" data-task-list>${renderTasks(today)}</div>
-      <button class="fab" type="button" data-action="show-add-task" aria-label="添加任务" title="添加任务">+</button>
+      <form data-task-form class="quick-add">
+        <input name="name" placeholder="添加今日任务，例如：有机化学醛酮习题 20 道" required />
+        <button class="primary" type="submit" ${buttonDisabled("addTask")} data-loading="${isLoading("addTask")}">${buttonText("addTask", "添加", "添加中…")}</button>
+      </form>
+      <div class="list today-task-list" data-task-list>${renderTasks(today)}</div>
+      <form data-today-record-form class="today-record-form">
+        <section class="today-section">
+          <h3>今日完成评价</h3>
+          <div class="rating-picker" role="radiogroup" aria-label="今日完成评价">
+            ${renderRatingPicker(record.rating || metrics.rating)}
+          </div>
+        </section>
+        <section class="today-section">
+          <label>今日一句
+            <textarea name="todaySentence" data-day-field="todaySentence" placeholder="今天最值得记录的是什么？">${escapeHTML(record.todaySentence || "")}</textarea>
+          </label>
+        </section>
+        <section class="today-section effective-record ${showEffectiveRecord ? "is-open" : ""}">
+          <button type="button" class="fold-toggle" data-action="toggle-effective-record" aria-expanded="${showEffectiveRecord}">
+            努力生效记录
+          </button>
+          <p class="meta">记录一次过去的努力在今天发挥作用的时刻。</p>
+          <div class="effective-record-body">
+            <textarea name="effectiveRecord" data-day-field="effectiveRecord" placeholder="今天学的____，在____时用上了 / 看懂了 / 想起来了。">${escapeHTML(effectiveRecord)}</textarea>
+            <p class="meta">例如：昨天背的 establish，今天阅读时认出来了。</p>
+          </div>
+        </section>
+        <button class="primary wide today-save" type="submit" ${buttonDisabled("saveTodayRecord")} data-loading="${isLoading("saveTodayRecord")}">${buttonText("saveTodayRecord", "完成今日记录", "保存中…")}</button>
+      </form>
     </section>
   `;
 }
@@ -1058,10 +1132,7 @@ function renderAiModelOptions() {
 
 function renderRatingLegend() {
   return [
-    ["A", "高质量完成"],
-    ["B", "合格推进"],
-    ["C", "保底完成"],
-    ["D", "失控或无有效记录"],
+    ...RATING_OPTIONS.map((option) => [option.value, option.label]),
     ["none", "无记录"],
   ]
     .map(
@@ -1093,7 +1164,7 @@ function renderMonthCalendar() {
           .map((date) => {
             if (!date) return `<span class="month-day is-empty"></span>`;
             const metrics = dayMetrics(date);
-            const hasRecord = metrics.total > 0;
+            const hasRecord = hasDayRecord(date);
             const rating = ratingClass(metrics.rating, hasRecord);
             const selected = date === selectedDate;
             const isToday = date === todayISO();
@@ -1143,14 +1214,24 @@ function renderRatingCalendar(review) {
 function renderDayDetail(date) {
   const tasks = tasksFor(date);
   const metrics = dayMetrics(date);
+  const record = dayRecord(date);
+  const noteItems = [
+    ["今日一句", record.todaySentence],
+    ["努力生效记录", record.effectiveRecord],
+  ].filter(([, value]) => String(value || "").trim());
   return `
     <section class="day-detail">
       <div class="view-head">
         <div>
           <h3>${date} · ${dLabel(date)}</h3>
-          <p class="meta">评级：${tasks.length ? metrics.rating : "无记录"} · 完成率：${metrics.rate}% · 闭环：${metrics.loops}</p>
+          <p class="meta">评级：${hasDayRecord(date) ? metrics.rating : "无记录"} · 完成率：${metrics.rate}% · 闭环：${metrics.loops}</p>
         </div>
       </div>
+      ${
+        noteItems.length
+          ? `<div class="day-note-list">${noteItems.map(([label, value]) => `<div class="day-loop-item"><strong>${label}</strong><p>${escapeHTML(value)}</p></div>`).join("")}</div>`
+          : ""
+      }
       ${
         tasks.length
           ? `<div class="day-task-list">${tasks.map(renderDayTaskDetail).join("")}</div>`
@@ -1196,66 +1277,61 @@ function renderDayTaskDetail(task) {
 
 function renderTasks(date) {
   const tasks = tasksFor(date);
-  if (!tasks.length) return `<p class="empty">今天还没有任务，先添加一个最小闭环。</p>`;
+  if (!tasks.length) return `<p class="empty">今天还没有任务。</p>`;
   return tasks.map((task) => renderTask(task, date)).join("");
 }
 
 function renderTask(task, date) {
-  const loop = task.loop || {};
+  const isEditing = uiState.editingTaskId === task.id;
   return `
     <article class="task ${task.done ? "done" : ""}" data-task-id="${task.id}" data-task-date="${escapeAttr(date)}">
       <div class="task-head">
         <input class="check" type="checkbox" ${task.done ? "checked" : ""} data-action="toggle-done" />
-        <div class="task-title">
-          <strong>${escapeHTML(task.name)}</strong>
-          <span class="meta">${escapeHTML(task.subject || "未分科")} ${task.note ? ` · ${escapeHTML(task.note)}` : ""}</span>
-          <span class="meta">闭环：${isCompleteLoop(task) ? "完整" : "未完整"}</span>
+        <div class="task-title ${isEditing ? "is-editing" : ""}">
+          ${
+            isEditing
+              ? `<input data-task-name-edit value="${escapeAttr(task.name || "")}" aria-label="任务名称" />`
+              : `<strong>${escapeHTML(task.name || "未命名任务")}</strong>`
+          }
+          ${task.note ? `<span class="meta">${escapeHTML(task.note)}</span>` : ""}
         </div>
-        <button class="danger" type="button" data-action="delete-task">删除</button>
-      </div>
-      <div class="loop">
-        <div class="loop-grid">
-          ${loopField("输入", "input", loop.input)}
-          ${loopField("输出", "output", loop.output)}
-          ${loopField("检查", "check", loop.check)}
-          ${loopField("修正", "fix", loop.fix)}
-          ${loopField("明天继续点", "tomorrow", loop.tomorrow, true)}
-        </div>
-        <div>
-          <div class="meta">错因标签</div>
-          <div class="chips">
-            ${allTags()
-              .map(
-                (tag) => `
-                <label class="chip">
-                  <input type="checkbox" data-action="toggle-tag" value="${escapeAttr(tag)}" ${(task.errorTags || []).includes(tag) ? "checked" : ""} />
-                  ${escapeHTML(tag)}
-                </label>
-              `,
-              )
-              .join("")}
-          </div>
+        <div class="task-actions">
+          ${
+            isEditing
+              ? `
+                <button type="button" data-action="save-task-name">保存</button>
+                <button type="button" data-action="cancel-task-edit">取消</button>
+              `
+              : `<button type="button" data-action="edit-task">编辑</button>`
+          }
+          <button class="danger" type="button" data-action="delete-task">删除</button>
         </div>
       </div>
     </article>
   `;
 }
 
-function loopField(label, key, value, wide = false) {
-  return `
-    <label class="${wide ? "wide" : ""}">${label}
-      <textarea data-loop-key="${key}" placeholder="${label}">${escapeHTML(value || "")}</textarea>
-    </label>
-  `;
+function renderRatingPicker(currentRating) {
+  return RATING_OPTIONS.map(
+    (option) => `
+      <label class="rating-card rating-${option.value} ${currentRating === option.value ? "active" : ""}">
+        <input type="radio" name="rating" value="${option.value}" ${currentRating === option.value ? "checked" : ""} data-action="set-rating" />
+        <strong>${option.value}</strong>
+        <span>${escapeHTML(option.label)}</span>
+      </label>
+    `,
+  ).join("");
 }
 
 function renderReview(review) {
-  const hasData = review.loopCount > 0 || review.rate > 0 || review.unfinished.length > 0;
+  const hasData = review.recordedDays > 0 || review.loopCount > 0 || review.rate > 0 || review.unfinished.length > 0;
   return `
     <div class="review">
       <div class="review-row"><strong>当前周期</strong><span>${review.days[0]} 至 ${review.days[review.days.length - 1]} · ${review.cycleDays} 天</span></div>
       <div class="review-row"><strong>周期完成率</strong><span>${review.rate}%</span></div>
+      <div class="review-row"><strong>记录天数</strong><span>${review.recordedDays}</span></div>
       <div class="review-row"><strong>闭环数</strong><span>${review.loopCount}</span></div>
+      <div class="review-row"><strong>轻量记录</strong><span>今日一句 ${review.sentenceCount} · 努力生效 ${review.effectiveRecordCount}</span></div>
       <div class="review-row"><strong>A/B/C/D</strong><span>A ${review.ratingCounts.A} · B ${review.ratingCounts.B} · C ${review.ratingCounts.C} · D ${review.ratingCounts.D}</span></div>
       <div class="review-row"><strong>高频错因</strong><span>${review.hotTags.length ? review.hotTags.map(escapeHTML).join("，") : "暂无"}</span></div>
       <div class="review-row"><strong>未完成任务</strong><span>${review.unfinished.length ? review.unfinished.slice(0, 8).map(escapeHTML).join("<br>") : "暂无"}</span></div>
@@ -1274,7 +1350,7 @@ function renderReview(review) {
       <h3>复盘记录</h3>
       <div class="empty">当前还没有手动复盘记录。</div>
     </section>
-    ${hasData ? "" : `<div class="empty review-empty">当前复盘周期还没有复盘数据，先完成一个任务，系统会自动开始记录。</div>`}
+    ${hasData ? "" : `<div class="empty review-empty">当前复盘周期还没有复盘数据，先完成一个任务或今日记录，系统会自动开始记录。</div>`}
   `;
 }
 
@@ -1331,7 +1407,6 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       currentView = button.dataset.view;
-      if (currentView === "today") todayMode = "list";
       render();
     });
   });
@@ -1363,22 +1438,35 @@ function bindEvents() {
       runBusy("addTask", async () => {
         const ok = addTask(event.currentTarget, todayISO());
         if (!ok) throw new Error("validation");
-        todayMode = "list";
         render();
       });
     });
   });
 
-  document.querySelectorAll("[data-action='show-add-task']").forEach((button) => {
-    button.addEventListener("click", () => {
-      todayMode = "add";
-      render();
+  document.querySelectorAll("[data-today-record-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      runBusy("saveTodayRecord", async () => {
+        saveTodayRecord(event.currentTarget, todayISO());
+      });
     });
   });
 
-  document.querySelectorAll("[data-action='show-task-list']").forEach((button) => {
+  document.querySelectorAll("[data-action='set-rating']").forEach((field) => {
+    field.addEventListener("change", (event) => {
+      setDayRecord(todayISO(), { rating: event.target.value }, true);
+    });
+  });
+
+  document.querySelectorAll("[data-day-field]").forEach((field) => {
+    field.addEventListener("input", (event) => {
+      setDayRecord(todayISO(), { [field.dataset.dayField]: event.target.value }, false);
+    });
+  });
+
+  document.querySelectorAll("[data-action='toggle-effective-record']").forEach((button) => {
     button.addEventListener("click", () => {
-      todayMode = "list";
+      uiState.showEffectiveRecord = !uiState.showEffectiveRecord;
       render();
     });
   });
@@ -1503,25 +1591,34 @@ function bindEvents() {
   document.querySelectorAll("[data-task-id]").forEach((card) => {
     const taskId = card.dataset.taskId;
     const taskDate = card.dataset.taskDate || todayISO();
-    card.querySelector("[data-action='toggle-done']").addEventListener("change", (event) => {
+    card.querySelector("[data-action='toggle-done']")?.addEventListener("change", (event) => {
       patchTask(taskId, { done: event.target.checked }, taskDate);
       pushToast(event.target.checked ? "任务已完成" : "已取消完成", "success");
     });
-    card.querySelector("[data-action='delete-task']").addEventListener("click", () => {
-      openConfirm({
-        title: "删除任务",
-        message: "确定删除这个任务吗？此操作无法撤销。",
-        confirmText: "确认删除",
-        danger: true,
-        onConfirm: () => runBusy("deleteTask", async () => deleteTask(taskId, taskDate)),
-      });
+    card.querySelector("[data-action='edit-task']")?.addEventListener("click", () => {
+      uiState.editingTaskId = taskId;
+      render();
+      document.querySelector(`[data-task-id="${CSS.escape(taskId)}"] [data-task-name-edit]`)?.focus();
     });
-    card.querySelectorAll("[data-loop-key]").forEach((field) => {
-      field.addEventListener("input", (event) => patchLoop(taskId, field.dataset.loopKey, event.target.value, false, taskDate));
-      field.addEventListener("change", (event) => patchLoop(taskId, field.dataset.loopKey, event.target.value, true, taskDate));
+    card.querySelector("[data-action='cancel-task-edit']")?.addEventListener("click", () => {
+      uiState.editingTaskId = null;
+      render();
     });
-    card.querySelectorAll("[data-action='toggle-tag']").forEach((field) => {
-      field.addEventListener("change", (event) => toggleTag(taskId, field.value, event.target.checked, taskDate));
+    card.querySelector("[data-action='save-task-name']")?.addEventListener("click", () => {
+      renameTask(taskId, card.querySelector("[data-task-name-edit]")?.value, taskDate);
+    });
+    card.querySelector("[data-task-name-edit]")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        renameTask(taskId, event.currentTarget.value, taskDate);
+      }
+      if (event.key === "Escape") {
+        uiState.editingTaskId = null;
+        render();
+      }
+    });
+    card.querySelector("[data-action='delete-task']")?.addEventListener("click", () => {
+      runBusy("deleteTask", async () => deleteTask(taskId, taskDate));
     });
   });
 
