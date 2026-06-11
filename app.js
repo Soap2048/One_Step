@@ -135,7 +135,6 @@ const RATING_OPTIONS = [
 const NAV_ITEMS = [
   { id: "dashboard", label: "首页" },
   { id: "today", label: "今日任务" },
-  { id: "stages", label: "阶段" },
   { id: "review", label: "复盘" },
   { id: "settings", label: "设置" },
 ];
@@ -887,7 +886,6 @@ function buttonText(action, label, loadingLabel) {
 
 function renderCurrentView() {
   if (currentView === "today") return renderTodayView();
-  if (currentView === "stages") return renderStagesView();
   if (currentView === "review") return renderReviewView();
   if (currentView === "settings") return renderSettingsView();
   return renderDashboardView();
@@ -960,30 +958,6 @@ function renderTodayView() {
           </div>
         </section>
         <button class="primary wide today-save" type="submit" ${buttonDisabled("saveTodayRecord")} data-loading="${isLoading("saveTodayRecord")}">${buttonText("saveTodayRecord", "完成今日记录", "保存中…")}</button>
-      </form>
-    </section>
-  `;
-}
-
-function renderStagesView() {
-  return `
-    <section class="panel">
-      <h2>阶段</h2>
-      <form data-settings-form class="form-grid">
-        <label>起始日期
-          <input type="date" name="startDate" value="${escapeAttr(state.settings.startDate)}" required />
-        </label>
-        <label>考试日期
-          <input type="date" name="examDate" value="${escapeAttr(state.settings.examDate)}" required />
-        </label>
-        <div class="wide">
-          <h3>阶段设置</h3>
-          <div class="list" data-stage-list>
-            ${renderStages()}
-          </div>
-          <button type="button" data-action="add-stage">添加阶段</button>
-        </div>
-        <button class="primary wide" type="submit" ${buttonDisabled("saveStages")} data-loading="${isLoading("saveStages")}">${buttonText("saveStages", "保存阶段", "保存中…")}</button>
       </form>
     </section>
   `;
@@ -1453,7 +1427,7 @@ function bindEvents() {
   document.querySelectorAll("[data-settings-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      const action = currentView === "stages" ? "saveStages" : "saveSettings";
+      const action = "saveSettings";
       if (!event.currentTarget.checkValidity()) {
         event.currentTarget.reportValidity();
         pushToast("请补全必填项", "error");
