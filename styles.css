@@ -842,20 +842,6 @@ label {
   justify-self: stretch;
 }
 
-.loop {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.loop-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1095,15 +1081,65 @@ label {
 
 .day-task-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .day-task {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: #fff;
-  padding: 12px;
+  padding: 10px 12px;
   box-shadow: var(--shadow-xs);
+}
+
+.day-task.is-done {
+  background: rgba(231, 243, 232, 0.72);
+}
+
+.review-task-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(36, 106, 115, 0.28);
+  background: rgba(36, 106, 115, 0.18);
+  justify-self: center;
+}
+
+.review-task-dot.is-done {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.review-task-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.review-task-main strong {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.review-task-status {
+  justify-self: end;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: var(--muted);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.review-task-status.done {
+  border-color: rgba(36, 106, 115, 0.24);
+  color: var(--accent);
+  background: rgba(36, 106, 115, 0.08);
 }
 
 .ai-review-list {
@@ -1129,37 +1165,35 @@ label {
   line-height: 1.7;
 }
 
-.day-loop-grid {
+.review-note-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 10px 0;
+  margin-bottom: 12px;
 }
 
-.day-note-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.day-loop-item {
+.review-note {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 10px;
   background: var(--bg-elevated);
 }
 
-.day-loop-item strong {
+.review-note strong {
   display: block;
   margin-bottom: 4px;
   font-size: 12px;
 }
 
-.day-loop-item p {
+.review-note p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.review-task-title {
+  margin: 10px 0 8px;
+  font-size: 14px;
 }
 
 .review-empty {
@@ -1416,13 +1450,15 @@ label {
   }
 
   .form-grid,
-  .loop-grid,
   .review-controls,
-  .day-loop-grid,
-  .day-note-list,
+  .review-note-list,
   .task-head,
   .review-row {
     grid-template-columns: 1fr;
+  }
+
+  .day-task {
+    grid-template-columns: 12px minmax(0, 1fr) auto;
   }
 
   .today-stats,

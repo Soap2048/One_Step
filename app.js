@@ -327,6 +327,15 @@ function isValidRating(value) {
   return RATING_OPTIONS.some((option) => option.value === value);
 }
 
+function explicitDayRating(date) {
+  const rating = dayRecord(date).rating;
+  return isValidRating(rating) ? rating : "";
+}
+
+function reviewRatingText(date) {
+  return explicitDayRating(date) || "未评级";
+}
+
 function isCompleteLoop(task) {
   const loop = task.loop || {};
   return ["input", "output", "check", "fix", "tomorrow"].every((key) => String(loop[key] || "").trim());
@@ -471,7 +480,7 @@ function monthCalendarDays(month) {
 }
 
 function ratingClass(rating, hasRecord) {
-  if (!hasRecord) return "none";
+  if (!hasRecord || !isValidRating(rating)) return "none";
   return rating;
 }
 
@@ -492,36 +501,31 @@ function cycleReview(date) {
   const ratingCounts = { A: 0, B: 0, C: 0, D: 0 };
   let totalTasks = 0;
   let doneTasks = 0;
-  let loopCount = 0;
   let recordedDays = 0;
   let sentenceCount = 0;
   let effectiveRecordCount = 0;
-  const tagCounts = {};
+  let unratedDays = 0;
   const unfinished = [];
 
   const calendarDays = days.map((day) => {
     const metrics = dayMetrics(day);
     const hasRecord = hasDayRecord(day);
     const record = dayRecord(day);
-    ratingCounts[metrics.rating] += 1;
+    const rating = explicitDayRating(day);
+    if (rating) ratingCounts[rating] += 1;
+    else if (hasRecord) unratedDays += 1;
     totalTasks += metrics.total;
     doneTasks += metrics.done;
-    loopCount += metrics.loops;
     if (hasRecord) recordedDays += 1;
     if (String(record.todaySentence || "").trim()) sentenceCount += 1;
     if (String(record.effectiveRecord || "").trim()) effectiveRecordCount += 1;
     for (const task of tasksFor(day)) {
-      for (const tag of task.errorTags || []) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-      if (!task.done) unfinished.push(`${day} · ${task.subject || "未分科"} · ${task.name || "未命名任务"}`);
+      if (!task.done) unfinished.push(`${day} · ${task.name || "未命名任务"}`);
     }
-    return { date: day, label: dLabel(day), metrics, hasRecord };
+    return { date: day, label: dLabel(day), metrics, hasRecord, rating };
   });
 
   const rate = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  const hotTags = Object.entries(tagCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([tag, count]) => `${tag} × ${count}`);
   return {
     days,
     calendarDays,
@@ -529,12 +533,13 @@ function cycleReview(date) {
     cycle,
     cycleLabel: reviewCycleLabel(cycle),
     rate,
-    loopCount,
+    totalTasks,
+    doneTasks,
     recordedDays,
     sentenceCount,
     effectiveRecordCount,
+    unratedDays,
     ratingCounts,
-    hotTags,
     unfinished,
   };
 }
@@ -542,12 +547,9 @@ function cycleReview(date) {
 function recentWeekReviewData(cutoffDate = selectedDate) {
   const end = parseDate(cutoffDate || todayISO());
   const days = [];
-  const tagCounts = {};
   const unfinishedTasks = [];
   let totalTasks = 0;
   let doneTasks = 0;
-  let loopCount = 0;
-  let outputCount = 0;
 
   for (let i = 6; i >= 0; i -= 1) {
     const d = new Date(end);
@@ -555,43 +557,34 @@ function recentWeekReviewData(cutoffDate = selectedDate) {
     const date = formatDate(d);
     const tasks = tasksFor(date);
     const metrics = dayMetrics(date);
-    const dayOutputs = [];
-    const dayNotes = [];
     const record = dayRecord(date);
+    const taskSummaries = [];
 
     for (const task of tasks) {
-      const loop = task.loop || {};
-      if (String(loop.output || "").trim()) {
-        outputCount += 1;
-        dayOutputs.push({ task: task.name, output: loop.output });
-      }
-      if (String(task.note || "").trim()) dayNotes.push({ task: task.name, note: task.note });
-      for (const tag of task.errorTags || []) tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-      if (!task.done) unfinishedTasks.push({ date, subject: task.subject || "未分科", name: task.name || "未命名任务" });
+      const summary = {
+        name: String(task.name || "未命名任务"),
+        done: Boolean(task.done),
+        completion: String(task.completion || "").trim(),
+        note: String(task.note || "").trim(),
+      };
+      taskSummaries.push(summary);
+      if (!task.done) unfinishedTasks.push({ date, name: summary.name });
     }
 
     totalTasks += metrics.total;
     doneTasks += metrics.done;
-    loopCount += metrics.loops;
     days.push({
       date,
       dDay: dLabel(date),
-      rating: hasDayRecord(date) ? metrics.rating : "无记录",
+      rating: reviewRatingText(date),
       completionRate: metrics.rate,
       taskCount: metrics.total,
       doneCount: metrics.done,
-      loopCount: metrics.loops,
-      outputCount: dayOutputs.length,
-      outputs: dayOutputs,
-      notes: dayNotes,
+      tasks: taskSummaries,
       todaySentence: record.todaySentence || "",
       effectiveRecord: record.effectiveRecord || "",
     });
   }
-
-  const highFrequencyErrorTags = Object.entries(tagCounts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([tag, count]) => ({ tag, count }));
 
   return {
     range: { start: days[0].date, end: days[days.length - 1].date },
@@ -599,9 +592,6 @@ function recentWeekReviewData(cutoffDate = selectedDate) {
       completionRate: totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0,
       totalTasks,
       doneTasks,
-      loopCount,
-      outputCount,
-      highFrequencyErrorTags,
       unfinishedTasks,
     },
     days,
@@ -614,7 +604,7 @@ function buildWeeklyReviewPrompt(data) {
 请输出以下 7 个部分，标题保持一致：
 1. 本周有效进展
 2. 本周主要问题
-3. 高频错因分析
+3. 任务完成模式
 4. 下周建议保留什么
 5. 下周建议删掉什么
 6. 下周最小可执行计划
@@ -1302,7 +1292,7 @@ function renderMonthCalendar() {
             if (!date) return `<span class="month-day is-empty"></span>`;
             const metrics = dayMetrics(date);
             const hasRecord = hasDayRecord(date);
-            const rating = ratingClass(metrics.rating, hasRecord);
+            const rating = ratingClass(explicitDayRating(date), hasRecord);
             const selected = date === selectedDate;
             const isToday = date === todayISO();
             return `
@@ -1310,7 +1300,7 @@ function renderMonthCalendar() {
                 type="button"
                 class="month-day rating-${rating} ${selected ? "is-selected" : ""} ${isToday ? "is-today" : ""}"
                 data-review-date="${escapeAttr(date)}"
-                title="${escapeAttr(`${date} · ${dLabel(date)} · ${hasRecord ? metrics.rating : "无记录"}`)}"
+                title="${escapeAttr(`${date} · ${dLabel(date)} · ${hasRecord ? reviewRatingText(date) : "无记录"}`)}"
               >
                 <span>${Number(date.slice(8))}</span>
               </button>
@@ -1328,7 +1318,7 @@ function renderRatingCalendar(review) {
       <div class="rating-calendar">
         ${review.calendarDays
           .map((day) => {
-            const rating = ratingClass(day.metrics.rating, day.hasRecord);
+            const rating = ratingClass(day.rating, day.hasRecord);
             const isToday = day.date === todayISO();
             const selected = day.date === selectedDate;
             return `
@@ -1336,7 +1326,7 @@ function renderRatingCalendar(review) {
                 type="button"
                 class="calendar-day rating-${rating} ${isToday ? "is-today" : ""} ${selected ? "is-selected" : ""}"
                 data-review-date="${escapeAttr(day.date)}"
-                title="${escapeAttr(`${day.date} · ${day.label} · ${day.hasRecord ? day.metrics.rating : "无记录"}`)}"
+                title="${escapeAttr(`${day.date} · ${day.label} · ${day.hasRecord ? reviewRatingText(day.date) : "无记录"}`)}"
               >
                 <span>${escapeHTML(day.label)}</span>
               </button>
@@ -1352,6 +1342,7 @@ function renderDayDetail(date) {
   const tasks = tasksFor(date);
   const metrics = dayMetrics(date);
   const record = dayRecord(date);
+  const hasRating = Boolean(explicitDayRating(date));
   const noteItems = [
     ["今日一句", record.todaySentence],
     ["努力生效记录", record.effectiveRecord],
@@ -1361,53 +1352,37 @@ function renderDayDetail(date) {
       <div class="view-head">
         <div>
           <h3>${date} · ${dLabel(date)}</h3>
-          <p class="meta">评级：${hasDayRecord(date) ? metrics.rating : "无记录"} · 完成率：${metrics.rate}% · 闭环：${metrics.loops}</p>
+          <p class="meta">评级：${hasRating ? explicitDayRating(date) : "未评级"} · 完成率：${metrics.rate}% · ${metrics.done}/${metrics.total} 已完成</p>
         </div>
       </div>
       ${
         noteItems.length
-          ? `<div class="day-note-list">${noteItems.map(([label, value]) => `<div class="day-loop-item"><strong>${label}</strong><p>${escapeHTML(value)}</p></div>`).join("")}</div>`
+          ? `<div class="review-note-list">${noteItems.map(([label, value]) => `<div class="review-note"><strong>${label}</strong><p>${escapeHTML(value)}</p></div>`).join("")}</div>`
           : ""
       }
+      <h3 class="review-task-title">今日任务</h3>
       ${
         tasks.length
           ? `<div class="day-task-list">${tasks.map(renderDayTaskDetail).join("")}</div>`
-          : `<div class="empty">这一天还没有任务记录。</div>`
+          : `<div class="empty">当天没有任务记录</div>`
       }
     </section>
   `;
 }
 
 function renderDayTaskDetail(task) {
-  const loop = task.loop || {};
-  const loopItems = [
-    ["输入", loop.input],
-    ["输出", loop.output],
-    ["检查", loop.check],
-    ["修正", loop.fix],
-    ["明天继续点", loop.tomorrow],
-  ];
+  const done = Boolean(task.done);
+  const name = String(task.name || "未命名任务");
+  const completion = String(task.completion || "").trim();
+  const note = String(task.note || "").trim();
   return `
-    <article class="day-task">
-      <div class="task-head">
-        <div class="task-title">
-          <strong>${escapeHTML(task.name || "未命名任务")}</strong>
-          <span class="meta">${escapeHTML(task.subject || "未分科")} · ${task.done ? "已完成" : "未完成"}${task.note ? ` · ${escapeHTML(task.note)}` : ""}${task.completion ? ` · ${escapeHTML(task.completion)}` : ""}</span>
-        </div>
+    <article class="day-task ${done ? "is-done" : ""}">
+      <span class="review-task-dot ${done ? "is-done" : ""}" aria-hidden="true"></span>
+      <div class="review-task-main">
+        <strong>${escapeHTML(name)}</strong>
+        ${completion ? `<span class="meta">${escapeHTML(completion)}</span>` : note ? `<span class="meta">${escapeHTML(note)}</span>` : ""}
       </div>
-      <div class="day-loop-grid">
-        ${loopItems
-          .map(
-            ([label, value]) => `
-              <div class="day-loop-item">
-                <strong>${label}</strong>
-                <p>${value ? escapeHTML(value) : "暂无"}</p>
-              </div>
-            `,
-          )
-          .join("")}
-      </div>
-      <div class="meta">错因：${task.errorTags?.length ? task.errorTags.map(escapeHTML).join("，") : "暂无"}</div>
+      <span class="review-task-status ${done ? "done" : "open"}">${done ? "已完成" : "未完成"}</span>
     </article>
   `;
 }
@@ -1482,17 +1457,16 @@ function renderRatingPicker(currentRating) {
 }
 
 function renderReview(review) {
-  const hasData = review.recordedDays > 0 || review.loopCount > 0 || review.rate > 0 || review.unfinished.length > 0;
+  const hasData = review.recordedDays > 0 || review.totalTasks > 0 || review.unfinished.length > 0;
   return `
     <div class="review">
       <div class="review-row"><strong>当前周期</strong><span>${review.days[0]} 至 ${review.days[review.days.length - 1]} · ${review.cycleDays} 天</span></div>
       <div class="review-row"><strong>周期完成率</strong><span>${review.rate}%</span></div>
+      <div class="review-row"><strong>任务完成</strong><span>${review.doneTasks}/${review.totalTasks}</span></div>
       <div class="review-row"><strong>记录天数</strong><span>${review.recordedDays}</span></div>
-      <div class="review-row"><strong>闭环数</strong><span>${review.loopCount}</span></div>
       <div class="review-row"><strong>轻量记录</strong><span>今日一句 ${review.sentenceCount} · 努力生效 ${review.effectiveRecordCount}</span></div>
-      <div class="review-row"><strong>A/B/C/D</strong><span>A ${review.ratingCounts.A} · B ${review.ratingCounts.B} · C ${review.ratingCounts.C} · D ${review.ratingCounts.D}</span></div>
-      <div class="review-row"><strong>高频错因</strong><span>${review.hotTags.length ? review.hotTags.map(escapeHTML).join("，") : "暂无"}</span></div>
-      <div class="review-row"><strong>未完成任务</strong><span>${review.unfinished.length ? review.unfinished.slice(0, 8).map(escapeHTML).join("<br>") : "暂无"}</span></div>
+      <div class="review-row"><strong>A/B/C/D</strong><span>A ${review.ratingCounts.A} · B ${review.ratingCounts.B} · C ${review.ratingCounts.C} · D ${review.ratingCounts.D} · 未评级 ${review.unratedDays}</span></div>
+      <div class="review-row"><strong>未完成任务</strong><span>${review.unfinished.length ? review.unfinished.slice(0, 8).map(escapeHTML).join("<br>") : "无"}</span></div>
     </div>
     <section class="ai-review">
       <div class="view-head">
