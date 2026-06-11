@@ -1668,7 +1668,13 @@ function bindEvents() {
     });
     card.querySelector("[data-action='delete-task']")?.addEventListener("click", () => {
       uiState.taskMenuId = null;
-      runBusy("deleteTask", async () => deleteTask(taskId, taskDate));
+      openConfirm({
+        title: "删除任务",
+        message: "确定删除这个任务吗？此操作无法撤销。",
+        confirmText: "确认删除",
+        danger: true,
+        onConfirm: () => runBusy("deleteTask", async () => deleteTask(taskId, taskDate)),
+      });
     });
     card.querySelector("[data-action='complete-task']")?.addEventListener("click", () => {
       completeTask(taskId, card.querySelector("[data-task-completion]")?.value, taskDate);
