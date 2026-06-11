@@ -119,8 +119,11 @@ let uiState = {
   showAiKey: false,
   editingTaskId: null,
   expandedTaskId: null,
+  taskMenuId: null,
   showEffectiveRecord: false,
 };
+let longPressTimer = 0;
+let suppressTaskClickId = null;
 
 const RATING_OPTIONS = [
   { value: "A", label: "全部或超额完成" },
@@ -784,6 +787,7 @@ function renameTask(taskId, name, date = selectedDate) {
   }
   patchTask(taskId, { name: nextName }, date);
   uiState.editingTaskId = null;
+  uiState.taskMenuId = null;
   pushToast("任务已更新", "success");
   return true;
 }
@@ -796,6 +800,7 @@ function completeTask(taskId, completion, date = selectedDate) {
     completedAt,
   }, date);
   uiState.expandedTaskId = null;
+  uiState.taskMenuId = null;
   pushToast("任务已完成", "success");
   return true;
 }
@@ -1297,10 +1302,11 @@ function renderTasks(date) {
 function renderTask(task, date) {
   const isEditing = uiState.editingTaskId === task.id;
   const isExpanded = uiState.expandedTaskId === task.id;
+  const isMenuOpen = uiState.taskMenuId === task.id;
   return `
     <article class="task ${task.done ? "done" : ""} ${isExpanded ? "expanded" : ""}" data-task-id="${task.id}" data-task-date="${escapeAttr(date)}">
       <div class="task-head">
-        <div class="task-status ${task.done ? "is-done" : ""}" aria-hidden="true">${task.done ? "✓" : ""}</div>
+        <span class="task-dot ${task.done ? "is-done" : ""}" aria-hidden="true"></span>
         <div class="task-title ${isEditing ? "is-editing" : ""}">
           ${
             isEditing
@@ -1317,9 +1323,13 @@ function renderTask(task, date) {
                 <button type="button" data-action="save-task-name">保存</button>
                 <button type="button" data-action="cancel-task-edit">取消</button>
               `
-              : `<button type="button" data-action="edit-task">编辑</button>`
+              : isMenuOpen
+                ? `
+                  <button type="button" data-action="edit-task">编辑</button>
+                  <button class="danger" type="button" data-action="delete-task">删除</button>
+                `
+                : ""
           }
-          <button class="danger" type="button" data-action="delete-task">删除</button>
         </div>
       </div>
       ${
@@ -1622,18 +1632,51 @@ function bindEvents() {
     const taskDate = card.dataset.taskDate || todayISO();
     card.addEventListener("click", (event) => {
       if (event.target.closest("button, input, textarea")) return;
+      if (suppressTaskClickId === taskId) {
+        suppressTaskClickId = null;
+        return;
+      }
+      if (uiState.taskMenuId) {
+        uiState.taskMenuId = null;
+        render();
+        return;
+      }
       uiState.expandedTaskId = uiState.expandedTaskId === taskId ? null : taskId;
       uiState.editingTaskId = null;
       render();
     });
+    card.addEventListener("contextmenu", (event) => {
+      if (event.target.closest("input, textarea")) return;
+      event.preventDefault();
+      uiState.taskMenuId = taskId;
+      uiState.expandedTaskId = uiState.expandedTaskId === taskId ? uiState.expandedTaskId : null;
+      render();
+    });
+    card.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" || event.target.closest("button, input, textarea")) return;
+      clearTimeout(longPressTimer);
+      longPressTimer = window.setTimeout(() => {
+        suppressTaskClickId = taskId;
+        uiState.taskMenuId = taskId;
+        uiState.expandedTaskId = uiState.expandedTaskId === taskId ? uiState.expandedTaskId : null;
+        render();
+      }, 520);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((eventName) => {
+      card.addEventListener(eventName, () => {
+        clearTimeout(longPressTimer);
+      });
+    });
     card.querySelector("[data-action='edit-task']")?.addEventListener("click", () => {
       uiState.editingTaskId = taskId;
       uiState.expandedTaskId = taskId;
+      uiState.taskMenuId = null;
       render();
       document.querySelector(`[data-task-id="${CSS.escape(taskId)}"] [data-task-name-edit]`)?.focus();
     });
     card.querySelector("[data-action='cancel-task-edit']")?.addEventListener("click", () => {
       uiState.editingTaskId = null;
+      uiState.taskMenuId = null;
       render();
     });
     card.querySelector("[data-action='save-task-name']")?.addEventListener("click", () => {
@@ -1650,6 +1693,7 @@ function bindEvents() {
       }
     });
     card.querySelector("[data-action='delete-task']")?.addEventListener("click", () => {
+      uiState.taskMenuId = null;
       runBusy("deleteTask", async () => deleteTask(taskId, taskDate));
     });
     card.querySelector("[data-action='complete-task']")?.addEventListener("click", () => {
