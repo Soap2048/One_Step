@@ -25,8 +25,35 @@ export function daysBetweenISO(from, to) {
   return Math.round((end - start) / MS_PER_DAY);
 }
 
+export function getCycleDayNumber(date, cycleStartDate) {
+  if (!parseISODate(date) || !parseISODate(cycleStartDate)) return null;
+  const diff = daysBetweenISO(cycleStartDate, date);
+  return diff < 0 ? null : diff + 1;
+}
+
+export function cycleDayLabel(date, cycleStartDate) {
+  const dayNumber = getCycleDayNumber(date, cycleStartDate);
+  return dayNumber === null ? "—" : `D${dayNumber}`;
+}
+
 export function getLastNDays(endDate, count) {
   return Array.from({ length: count }, (_, index) => addDaysISO(endDate, index - count + 1));
+}
+
+export function getCycleDates({ endDate, cycleStartDate, count }) {
+  if (!parseISODate(endDate) || !parseISODate(cycleStartDate) || getCycleDayNumber(endDate, cycleStartDate) === null) {
+    return [];
+  }
+  const dayCount = Math.max(1, Number(count) || 1);
+  const rangeStart = addDaysISO(endDate, 1 - dayCount);
+  const startDate = rangeStart < cycleStartDate ? cycleStartDate : rangeStart;
+  const days = [];
+  let cursor = startDate;
+  while (cursor && cursor <= endDate) {
+    days.push(cursor);
+    cursor = addDaysISO(cursor, 1);
+  }
+  return days;
 }
 
 export function getWeekRange(date) {

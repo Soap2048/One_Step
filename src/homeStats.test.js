@@ -5,6 +5,9 @@ import {
   buildDaySummary,
   calculateActionStreak,
   calculateWeekCompletionRate,
+  cycleDayLabel,
+  getCycleDates,
+  getCycleDayNumber,
   getLastNDays,
   getWeekRange,
 } from "./homeStats.js";
@@ -13,6 +16,40 @@ test("date helpers cross month boundaries", () => {
   assert.equal(addDaysISO("2026-06-01", -1), "2026-05-31");
   assert.deepEqual(getLastNDays("2026-06-02", 3), ["2026-05-31", "2026-06-01", "2026-06-02"]);
   assert.deepEqual(getWeekRange("2026-06-11"), { start: "2026-06-08", end: "2026-06-14" });
+});
+
+test("cycle day numbers start at the configured cycle start date", () => {
+  assert.equal(getCycleDayNumber("2026-06-05", "2026-06-07"), null);
+  assert.equal(getCycleDayNumber("2026-06-06", "2026-06-07"), null);
+  assert.equal(getCycleDayNumber("2026-06-07", "2026-06-07"), 1);
+  assert.equal(getCycleDayNumber("2026-06-08", "2026-06-07"), 2);
+  assert.equal(getCycleDayNumber("2026-06-11", "2026-06-07"), 5);
+  assert.equal(cycleDayLabel("2026-06-06", "2026-06-07"), "—");
+  assert.equal(cycleDayLabel("2026-06-11", "2026-06-07"), "D5");
+});
+
+test("cycle day numbers handle same-day, before-start, cross-month, and cross-year ranges", () => {
+  assert.equal(getCycleDayNumber("2026-06-07", "2026-06-07"), 1);
+  assert.equal(getCycleDayNumber("2026-06-06", "2026-06-07"), null);
+  assert.equal(getCycleDayNumber("2026-07-01", "2026-06-30"), 2);
+  assert.equal(getCycleDayNumber("2027-01-01", "2026-12-31"), 2);
+});
+
+test("cycle date ranges do not include days before the cycle start", () => {
+  assert.deepEqual(getCycleDates({ endDate: "2026-06-11", cycleStartDate: "2026-06-07", count: 7 }), [
+    "2026-06-07",
+    "2026-06-08",
+    "2026-06-09",
+    "2026-06-10",
+    "2026-06-11",
+  ]);
+  assert.deepEqual(getCycleDates({ endDate: "2026-06-07", cycleStartDate: "2026-06-07", count: 7 }), ["2026-06-07"]);
+  assert.deepEqual(getCycleDates({ endDate: "2026-06-06", cycleStartDate: "2026-06-07", count: 7 }), []);
+  assert.deepEqual(getCycleDates({ endDate: "2027-01-02", cycleStartDate: "2026-12-31", count: 7 }), [
+    "2026-12-31",
+    "2027-01-01",
+    "2027-01-02",
+  ]);
 });
 
 test("day summary treats A/B/C or completed tasks as action", () => {

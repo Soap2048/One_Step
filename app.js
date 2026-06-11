@@ -2,6 +2,9 @@ import {
   buildDaySummary,
   calculateActionStreak,
   calculateWeekCompletionRate,
+  cycleDayLabel,
+  getCycleDates,
+  getCycleDayNumber,
   dateLabel,
   getLastNDays,
 } from "./src/homeStats.js";
@@ -452,7 +455,7 @@ function streakUntil(date) {
 
 function dLabel(date) {
   if (!state.settings.startDate) return date.slice(5);
-  return `D${Math.max(1, daysBetween(state.settings.startDate, date) + 1)}`;
+  return cycleDayLabel(date, state.settings.startDate);
 }
 
 function addMonths(month, delta) {
@@ -490,13 +493,10 @@ function cycleReview(date) {
   const end = parseDate(endDate);
   const days = [];
   const cycle = normalizeReviewCycle(state.settings.reviewCycle);
-  const cycleDays =
-    cycle === "all" ? Math.max(1, daysBetween(state.settings.startDate || today, today) + 1) : Number(cycle);
-  for (let i = cycleDays - 1; i >= 0; i -= 1) {
-    const d = new Date(end);
-    d.setDate(end.getDate() - i);
-    days.push(formatDate(d));
-  }
+  const cycleStartDate = state.settings.startDate || endDate;
+  const cycleSpan = getCycleDayNumber(today, cycleStartDate);
+  const cycleDays = cycle === "all" ? cycleSpan || 1 : Number(cycle);
+  days.push(...getCycleDates({ endDate, cycleStartDate, count: cycleDays }));
 
   const ratingCounts = { A: 0, B: 0, C: 0, D: 0 };
   let totalTasks = 0;
@@ -522,7 +522,7 @@ function cycleReview(date) {
     for (const task of tasksFor(day)) {
       if (!task.done) unfinished.push(`${day} · ${task.name || "未命名任务"}`);
     }
-    return { date: day, label: dLabel(day), metrics, hasRecord, rating };
+    return { date: day, label: dLabel(day), dayNumber: getCycleDayNumber(day, cycleStartDate), metrics, hasRecord, rating };
   });
 
   const rate = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
@@ -1313,6 +1313,9 @@ function renderMonthCalendar() {
 }
 
 function renderRatingCalendar(review) {
+  if (!review.calendarDays.length) {
+    return `<div class="empty review-empty">复盘截止日期早于起始日期，暂无周期日期。</div>`;
+  }
   return `
     <div class="rating-calendar-wrap" aria-label="评级日历">
       <div class="rating-calendar">
@@ -1458,9 +1461,12 @@ function renderRatingPicker(currentRating) {
 
 function renderReview(review) {
   const hasData = review.recordedDays > 0 || review.totalTasks > 0 || review.unfinished.length > 0;
+  const rangeLabel = review.days.length
+    ? `${review.days[0]} 至 ${review.days[review.days.length - 1]} · ${review.days.length} 天`
+    : "暂无周期日期";
   return `
     <div class="review">
-      <div class="review-row"><strong>当前周期</strong><span>${review.days[0]} 至 ${review.days[review.days.length - 1]} · ${review.cycleDays} 天</span></div>
+      <div class="review-row"><strong>当前周期</strong><span>${rangeLabel}</span></div>
       <div class="review-row"><strong>周期完成率</strong><span>${review.rate}%</span></div>
       <div class="review-row"><strong>任务完成</strong><span>${review.doneTasks}/${review.totalTasks}</span></div>
       <div class="review-row"><strong>记录天数</strong><span>${review.recordedDays}</span></div>
