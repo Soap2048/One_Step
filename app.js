@@ -118,6 +118,7 @@ let uiState = {
   confirm: null,
   showAiKey: false,
   editingTaskId: null,
+  expandedTaskId: null,
   showEffectiveRecord: false,
 };
 
@@ -787,6 +788,18 @@ function renameTask(taskId, name, date = selectedDate) {
   return true;
 }
 
+function completeTask(taskId, completion, date = selectedDate) {
+  const completedAt = new Date().toISOString();
+  patchTask(taskId, {
+    done: true,
+    completion: String(completion || "").trim(),
+    completedAt,
+  }, date);
+  uiState.expandedTaskId = null;
+  pushToast("任务已完成", "success");
+  return true;
+}
+
 function deleteTask(taskId, date = selectedDate) {
   setTasks(
     date,
@@ -1255,7 +1268,7 @@ function renderDayTaskDetail(task) {
       <div class="task-head">
         <div class="task-title">
           <strong>${escapeHTML(task.name || "未命名任务")}</strong>
-          <span class="meta">${escapeHTML(task.subject || "未分科")} · ${task.done ? "已完成" : "未完成"}${task.note ? ` · ${escapeHTML(task.note)}` : ""}</span>
+          <span class="meta">${escapeHTML(task.subject || "未分科")} · ${task.done ? "已完成" : "未完成"}${task.note ? ` · ${escapeHTML(task.note)}` : ""}${task.completion ? ` · ${escapeHTML(task.completion)}` : ""}</span>
         </div>
       </div>
       <div class="day-loop-grid">
@@ -1283,10 +1296,11 @@ function renderTasks(date) {
 
 function renderTask(task, date) {
   const isEditing = uiState.editingTaskId === task.id;
+  const isExpanded = uiState.expandedTaskId === task.id;
   return `
-    <article class="task ${task.done ? "done" : ""}" data-task-id="${task.id}" data-task-date="${escapeAttr(date)}">
+    <article class="task ${task.done ? "done" : ""} ${isExpanded ? "expanded" : ""}" data-task-id="${task.id}" data-task-date="${escapeAttr(date)}">
       <div class="task-head">
-        <input class="check" type="checkbox" ${task.done ? "checked" : ""} data-action="toggle-done" />
+        <div class="task-status ${task.done ? "is-done" : ""}" aria-hidden="true">${task.done ? "✓" : ""}</div>
         <div class="task-title ${isEditing ? "is-editing" : ""}">
           ${
             isEditing
@@ -1294,6 +1308,7 @@ function renderTask(task, date) {
               : `<strong>${escapeHTML(task.name || "未命名任务")}</strong>`
           }
           ${task.note ? `<span class="meta">${escapeHTML(task.note)}</span>` : ""}
+          ${task.done ? `<span class="meta">${task.completion ? escapeHTML(task.completion) : "已完成"}</span>` : ""}
         </div>
         <div class="task-actions">
           ${
@@ -1307,6 +1322,20 @@ function renderTask(task, date) {
           <button class="danger" type="button" data-action="delete-task">删除</button>
         </div>
       </div>
+      ${
+        isExpanded
+          ? `
+            <div class="task-completion">
+              <label>完成情况
+                <textarea data-task-completion placeholder="写一句完成情况，例如：完成 20 道，错 4 道，已标记。">${escapeHTML(task.completion || "")}</textarea>
+              </label>
+              <div class="task-completion-actions">
+                <button class="primary" type="button" data-action="complete-task">${task.done ? "更新完成情况" : "完成任务"}</button>
+              </div>
+            </div>
+          `
+          : ""
+      }
     </article>
   `;
 }
@@ -1591,12 +1620,15 @@ function bindEvents() {
   document.querySelectorAll("[data-task-id]").forEach((card) => {
     const taskId = card.dataset.taskId;
     const taskDate = card.dataset.taskDate || todayISO();
-    card.querySelector("[data-action='toggle-done']")?.addEventListener("change", (event) => {
-      patchTask(taskId, { done: event.target.checked }, taskDate);
-      pushToast(event.target.checked ? "任务已完成" : "已取消完成", "success");
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, textarea")) return;
+      uiState.expandedTaskId = uiState.expandedTaskId === taskId ? null : taskId;
+      uiState.editingTaskId = null;
+      render();
     });
     card.querySelector("[data-action='edit-task']")?.addEventListener("click", () => {
       uiState.editingTaskId = taskId;
+      uiState.expandedTaskId = taskId;
       render();
       document.querySelector(`[data-task-id="${CSS.escape(taskId)}"] [data-task-name-edit]`)?.focus();
     });
@@ -1619,6 +1651,9 @@ function bindEvents() {
     });
     card.querySelector("[data-action='delete-task']")?.addEventListener("click", () => {
       runBusy("deleteTask", async () => deleteTask(taskId, taskDate));
+    });
+    card.querySelector("[data-action='complete-task']")?.addEventListener("click", () => {
+      completeTask(taskId, card.querySelector("[data-task-completion]")?.value, taskDate);
     });
   });
 
