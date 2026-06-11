@@ -559,14 +559,6 @@ label {
   grid-column: 1 / -1;
 }
 
-.tag-row,
-.inline-row {
-  display: flex;
-  gap: 8px;
-  align-items: end;
-  min-width: 0;
-}
-
 .stage-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 180px) auto;
@@ -583,15 +575,121 @@ label {
   white-space: nowrap;
 }
 
-.settings-basic-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .secret-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.settings-page {
+  max-width: 980px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.settings-head {
+  margin-bottom: 18px;
+}
+
+.settings-form {
+  display: grid;
+  gap: 24px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-section-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.settings-section-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-section-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-xs);
+}
+
+.settings-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  gap: 18px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-item:last-child {
+  border-bottom: 0;
+}
+
+.settings-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-copy strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.settings-copy span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.settings-control > input,
+.settings-control > select,
+.settings-control > button {
+  width: 100%;
+}
+
+.setting-row-top {
+  align-items: start;
+}
+
+.setting-row-top .settings-control,
+.setting-row-wide-control .settings-control {
+  display: grid;
+  justify-content: stretch;
+}
+
+.settings-stage-control {
+  display: grid;
+  gap: 10px;
+  width: min(460px, 100%);
+}
+
+.settings-stage-list {
+  gap: 8px;
+}
+
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-form-actions button {
+  min-width: 132px;
 }
 
 .form-help {
@@ -1235,18 +1333,6 @@ label {
   font-size: 13px;
 }
 
-.custom-tags {
-  margin-bottom: 12px;
-}
-
-.settings-row,
-.settings-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
 .toast-stack {
   position: fixed;
   top: 16px;
@@ -1508,12 +1594,6 @@ label {
     min-height: 76px;
   }
 
-  .tag-row,
-  .inline-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
   .stage-row {
     grid-template-columns: 1fr;
     align-items: stretch;
@@ -1523,14 +1603,35 @@ label {
     width: 100%;
   }
 
+  .settings-page {
+    max-width: none;
+  }
+
+  .settings-form {
+    gap: 20px;
+  }
+
+  .settings-item {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .settings-control {
+    justify-content: stretch;
+  }
+
+  .settings-stage-control {
+    width: 100%;
+  }
+
   input[type="date"] {
     display: block;
     width: 100%;
     min-width: 0;
   }
 
-  .settings-basic-actions button,
-  .settings-actions button {
+  .settings-form-actions button {
     width: 100%;
   }
 

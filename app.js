@@ -776,10 +776,6 @@ function updateSettings(form) {
     ? normalizeReviewCycle(data.get("reviewCycle"))
     : state.settings.reviewCycle;
 
-  if (data.has("subjects") && !nextSubjects.length) {
-    pushToast("请至少填写一个科目", "error");
-    return false;
-  }
   if (form.querySelector("[data-stage-row]") && !nextStages.length) {
     pushToast("请至少保留一个阶段", "error");
     return false;
@@ -787,7 +783,7 @@ function updateSettings(form) {
 
   state.settings.examDate = nextExamDate;
   state.settings.startDate = nextStartDate;
-  if (data.has("subjects")) {
+  if (data.has("subjects") && nextSubjects.length) {
     state.settings.subjects = nextSubjects;
   }
   if (form.querySelector("[data-stage-row]")) {
@@ -878,15 +874,6 @@ function deleteTask(taskId, date = selectedDate) {
     tasksFor(date).filter((task) => task.id !== taskId),
   );
   pushToast("已删除任务", "success");
-}
-
-function addCustomTag(value) {
-  const tag = value.trim();
-  if (!tag) return;
-  state.settings.customTags = [...new Set([...state.settings.customTags, tag])];
-  saveState();
-  pushToast("已添加自定义标签", "success");
-  render();
 }
 
 function updateReviewCycle(form) {
@@ -1137,77 +1124,138 @@ function renderSettingsView() {
     ? "OpenAI-compatible 厂商会用于 AI 周期复盘。"
     : "该厂商暂未完全适配 AI 周期复盘调用。";
   return `
-    <section class="panel">
-      <h2>设置</h2>
-      <form data-settings-form class="form-grid">
-        <label>起始日期
-          <input type="date" name="startDate" value="${escapeAttr(state.settings.startDate)}" required />
-        </label>
-        <label>考试日期
-          <input type="date" name="examDate" value="${escapeAttr(state.settings.examDate)}" required />
-        </label>
-        <label class="wide">科目
-          <textarea name="subjects">${escapeHTML(state.settings.subjects.join("，"))}</textarea>
-        </label>
-        <div class="settings-basic-actions wide">
-          <button class="primary" type="submit" ${buttonDisabled("saveSettings")} data-loading="${isLoading("saveSettings")}">${buttonText("saveSettings", "确认基础设置", "保存中…")}</button>
+    <section class="settings-page">
+      <div class="view-head settings-head">
+        <div>
+          <h2>设置</h2>
+          <p class="meta">调整目标、复盘周期、阶段和 AI 配置。</p>
         </div>
-        <label>复盘周期
-          <select name="reviewCycle" data-review-cycle-select>
-            ${renderReviewCycleOptions()}
-          </select>
-        </label>
-        <div class="wide">
-          <h3>阶段管理</h3>
-          <div class="list" data-stage-list>
-            ${renderStages()}
-          </div>
-          <button type="button" data-action="add-stage">添加阶段</button>
-        </div>
-        <div class="wide">
-          <h3>错因标签管理</h3>
-          <div class="chips custom-tags">
-            ${state.settings.customTags.length ? state.settings.customTags.map((tag) => `<span class="chip">${escapeHTML(tag)}</span>`).join("") : `<span class="empty-inline">暂无自定义标签</span>`}
-          </div>
-          <div class="tag-row settings-row">
-            <input data-custom-tag placeholder="添加自定义错因标签" />
-            <button type="button" data-action="add-tag">添加</button>
-          </div>
-        </div>
-        <div class="wide">
-          <h3>AI API 设置</h3>
-          <div class="form-grid">
-            <label>选择模型厂商
-              <select name="aiProvider" data-ai-provider-select>
-                ${renderAiProviderOptions()}
-              </select>
-            </label>
-            <label class="ai-provider-name${customProviderStyle}">Provider Name
-              <input name="aiProviderName" value="${escapeAttr(aiApi.providerName)}" placeholder="例如：本地兼容接口" />
-            </label>
-            <label>Base URL
-              <input name="aiBaseUrl" data-ai-base-url value="${escapeAttr(aiApi.baseUrl)}" placeholder="例如：https://api.example.com/v1" />
-            </label>
-            <label>常用模型
-              <select name="aiModel" data-ai-model-preset>
-                ${renderAiModelOptions()}
-              </select>
-            </label>
-            <label class="wide">API Key
-              <span class="secret-row">
-                <input name="aiApiKey" type="${uiState.showAiKey ? "text" : "password"}" value="${escapeAttr(aiApi.apiKey)}" placeholder="本地保存，不会上传" autocomplete="off" />
-                <button type="button" data-action="toggle-ai-key">${uiState.showAiKey ? "隐藏" : "显示"}</button>
-              </span>
-            </label>
-            <p class="form-help wide">${escapeHTML(providerHint)}</p>
-            <div class="settings-actions wide">
-              <button type="button" data-action="test-ai-connection" ${buttonDisabled("testAiConnection")} data-loading="${isLoading("testAiConnection")}">${buttonText("testAiConnection", "测试连接", "测试中…")}</button>
-              <button class="primary" type="submit" ${buttonDisabled("saveSettings")} data-loading="${isLoading("saveSettings")}">${buttonText("saveSettings", "保存全部设置", "保存中…")}</button>
-            </div>
-          </div>
+      </div>
+      <form data-settings-form class="settings-form">
+        ${settingsSection(
+          "基础设置",
+          "用于首页倒计时、D-day 和默认复盘范围。",
+          [
+            settingsRow(
+              "起始日期",
+              "学习周期和 D 序号从这一天开始计算。",
+              `<input type="date" name="startDate" value="${escapeAttr(state.settings.startDate)}" required />`,
+            ),
+            settingsRow(
+              "目标日期",
+              "用于首页显示剩余天数。",
+              `<input type="date" name="examDate" value="${escapeAttr(state.settings.examDate)}" required />`,
+            ),
+            settingsRow(
+              "默认复盘周期",
+              "进入复盘页时使用的周期范围。",
+              `<select name="reviewCycle">${renderReviewCycleOptions()}</select>`,
+            ),
+          ],
+        )}
+        ${settingsSection(
+          "阶段与数据",
+          "阶段用于首页当前阶段和复盘 D 序号，不影响任务创建。",
+          [
+            settingsRow(
+              "阶段管理",
+              "保留至少一个阶段；删除阶段不会删除任何任务记录。",
+              `
+                <div class="settings-stage-control">
+                  <div class="list settings-stage-list" data-stage-list>
+                    ${renderStages()}
+                  </div>
+                  <button type="button" data-action="add-stage">添加阶段</button>
+                </div>
+              `,
+              "setting-row-top",
+            ),
+          ],
+        )}
+        ${settingsSection(
+          "AI 设置",
+          "用于生成周期复盘；API Key 只保存在本地。",
+          [
+            settingsRow(
+              "模型厂商",
+              "选择 OpenAI-compatible 厂商。",
+              `
+                <select name="aiProvider" data-ai-provider-select>
+                  ${renderAiProviderOptions()}
+                </select>
+              `,
+            ),
+            settingsRow(
+              "Provider Name",
+              "自定义兼容接口的显示名称。",
+              `<input name="aiProviderName" value="${escapeAttr(aiApi.providerName)}" placeholder="例如：本地兼容接口" />`,
+              `ai-provider-name${customProviderStyle}`,
+            ),
+            settingsRow(
+              "Base URL",
+              "兼容接口地址。",
+              `<input name="aiBaseUrl" data-ai-base-url value="${escapeAttr(aiApi.baseUrl)}" placeholder="例如：https://api.example.com/v1" />`,
+            ),
+            settingsRow(
+              "常用模型",
+              "保存后用于 AI 周期复盘。",
+              `
+                <select name="aiModel" data-ai-model-preset>
+                  ${renderAiModelOptions()}
+                </select>
+              `,
+            ),
+            settingsRow(
+              "API Key",
+              "本地保存，不会上传到其他地方。",
+              `
+                <span class="secret-row">
+                  <input name="aiApiKey" type="${uiState.showAiKey ? "text" : "password"}" value="${escapeAttr(aiApi.apiKey)}" placeholder="本地保存，不会上传" autocomplete="off" />
+                  <button type="button" data-action="toggle-ai-key">${uiState.showAiKey ? "隐藏" : "显示"}</button>
+                </span>
+              `,
+              "setting-row-wide-control",
+            ),
+            settingsRow(
+              "连接测试",
+              providerHint,
+              `<button type="button" data-action="test-ai-connection" ${buttonDisabled("testAiConnection")} data-loading="${isLoading("testAiConnection")}">${buttonText("testAiConnection", "测试连接", "测试中…")}</button>`,
+            ),
+          ],
+        )}
+        <div class="settings-form-actions">
+          <button class="primary" type="submit" ${buttonDisabled("saveSettings")} data-loading="${isLoading("saveSettings")}">${buttonText("saveSettings", "保存设置", "保存中…")}</button>
         </div>
       </form>
     </section>
+  `;
+}
+
+function settingsSection(title, description, rows) {
+  return `
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <h3>${escapeHTML(title)}</h3>
+        <p>${escapeHTML(description)}</p>
+      </div>
+      <div class="settings-section-card">
+        ${rows.join("")}
+      </div>
+    </section>
+  `;
+}
+
+function settingsRow(title, description, control, extraClass = "") {
+  return `
+    <div class="settings-item ${extraClass}">
+      <div class="settings-copy">
+        <strong>${escapeHTML(title)}</strong>
+        <span>${escapeHTML(description)}</span>
+      </div>
+      <div class="settings-control">
+        ${control}
+      </div>
+    </div>
   `;
 }
 
@@ -1663,7 +1711,7 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll("[data-review-cycle-select]").forEach((select) => {
+  document.querySelectorAll("[data-review-cycle-form] [data-review-cycle-select]").forEach((select) => {
     select.addEventListener("change", (event) => {
       const form = event.target.closest("form");
       if (!form) return;
@@ -1759,16 +1807,17 @@ function bindEvents() {
 
   document.querySelectorAll("[data-action='remove-stage']").forEach((button) => {
     button.addEventListener("click", () => {
-      state.settings.stages.splice(Number(button.dataset.index), 1);
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-action='add-tag']").forEach((button) => {
-    button.addEventListener("click", () => {
-      const input = document.querySelector("[data-custom-tag]");
-      addCustomTag(input.value);
+      openConfirm({
+        title: "删除阶段",
+        message: "确定删除这个阶段吗？任务和历史记录不会被删除。",
+        confirmText: "确认删除",
+        danger: true,
+        onConfirm: () => {
+          state.settings.stages.splice(Number(button.dataset.index), 1);
+          pushToast("阶段已移除，保存设置后生效", "success");
+          render();
+        },
+      });
     });
   });
 
