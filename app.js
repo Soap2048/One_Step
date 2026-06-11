@@ -1,3 +1,11 @@
+import {
+  buildDaySummary,
+  calculateActionStreak,
+  calculateWeekCompletionRate,
+  dateLabel,
+  getLastNDays,
+} from "./src/homeStats.js";
+
 const STORAGE_KEY = "kaoyan-loop-recorder-v1";
 
 const formatDate = (date) => {
@@ -146,6 +154,16 @@ const REVIEW_CYCLE_OPTIONS = [
   { value: "30", label: "30 天" },
   { value: "90", label: "90 天" },
   { value: "all", label: "全部" },
+];
+
+const ACTION_QUOTES = [
+  "努力会在恰当时机发挥作用。",
+  "行动本身就是反馈，先推进一点，再判断方向。",
+  "长期主义不是忍耐空白，而是持续制造可被复盘的证据。",
+  "今天的小完成，会降低明天开始的阻力。",
+  "努力不会总是立即兑现，但它会增加你抓住机会的概率。",
+  "记录不是为了证明完美，而是为了看见真实的推进。",
+  "把注意力放在下一步，结果会慢慢有据可查。",
 ];
 
 function normalizeReviewCycle(value) {
@@ -337,6 +355,66 @@ function hasDayRecord(date) {
       String(record.todaySentence || "").trim() ||
       String(record.effectiveRecord || "").trim(),
   );
+}
+
+function daySummary(date) {
+  return buildDaySummary({
+    tasks: tasksFor(date),
+    record: dayRecord(date),
+    computedRating: dayMetrics(date).rating,
+  });
+}
+
+function daySummariesFor(dates) {
+  return Object.fromEntries(dates.map((date) => [date, daySummary(date)]));
+}
+
+function knownDatesUntil(date) {
+  const dates = new Set([date]);
+  Object.keys(state.tasksByDate || {}).forEach((day) => {
+    if (day <= date) dates.add(day);
+  });
+  Object.keys(state.dailyRecords || {}).forEach((day) => {
+    if (day <= date) dates.add(day);
+  });
+  return [...dates].sort();
+}
+
+function goalName(date) {
+  const stage = currentStage(date);
+  if (stage && stage !== "未设置") return stage;
+  return state.settings.examDate ? "长期目标" : "目标未设置";
+}
+
+function friendlyDate(date) {
+  const parsed = parseDate(date);
+  const month = parsed.getMonth() + 1;
+  const day = parsed.getDate();
+  const weekday = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][parsed.getDay()];
+  return `${month} 月 ${day} 日，${weekday}`;
+}
+
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 6) return "夜深了";
+  if (hour < 12) return "早上好";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+}
+
+function dailyActionQuote(date) {
+  const index = Math.abs(daysBetween("2020-01-01", date)) % ACTION_QUOTES.length;
+  return ACTION_QUOTES[index];
+}
+
+function todayActionState(date) {
+  const tasks = tasksFor(date);
+  const unfinished = tasks.find((task) => !task.done);
+  const hasSavedRating = isValidRating(dayRecord(date).rating);
+  if (!tasks.length) return { type: "add-task", label: "添加今日任务", disabled: false };
+  if (unfinished) return { type: "continue-task", label: "继续今日任务", disabled: false, taskId: unfinished.id };
+  if (!hasSavedRating) return { type: "complete-review", label: "完成今日评价", disabled: false };
+  return { type: "done", label: "今日已完成", disabled: true };
 }
 
 function currentStage(date) {
@@ -893,20 +971,87 @@ function renderCurrentView() {
 
 function renderDashboardView() {
   const today = todayISO();
-  const metrics = dayMetrics(today);
-  const dDay = state.settings.startDate ? Math.max(1, daysBetween(state.settings.startDate, today) + 1) : "-";
-  const leftDays = state.settings.examDate ? Math.max(0, daysBetween(today, state.settings.examDate)) : "-";
+  const weekDays = getLastNDays(today, 7);
+  const summaries = daySummariesFor([...new Set([...knownDatesUntil(today), ...weekDays])]);
+  const weekRate = calculateWeekCompletionRate(summaries, today);
+  const action = todayActionState(today);
 
   return `
-    <section class="panel">
-      <h2>Dashboard</h2>
-      <section class="stats">
-        ${stat("今天是", `D${dDay}`)}
-        ${stat("剩余天数", leftDays)}
-        ${stat("当前阶段", currentStage(today))}
-        ${stat("今日完成率", `${metrics.rate}%`)}
-        ${stat("连续完成", `${streakUntil(today)} 天`)}
+    <section class="panel dashboard-home">
+      <div class="dashboard-head">
+        <div>
+          <p class="eyebrow">${greeting()}</p>
+          <h2>${friendlyDate(today)}</h2>
+        </div>
+      </div>
+      ${renderTodayOverview(today, action)}
+      ${renderSevenDayStrip(weekDays, today)}
+      <section class="home-metrics" aria-label="轻量统计">
+        ${stat("连续行动天数", `${calculateActionStreak(summaries, today)} 天`)}
+        ${stat("本周完成率", weekRate.total ? `${weekRate.rate}%` : "暂无任务")}
       </section>
+      <p class="action-quote">${escapeHTML(dailyActionQuote(today))}</p>
+    </section>
+  `;
+}
+
+function renderTodayOverview(today, action) {
+  const metrics = dayMetrics(today);
+  const progress = clamp(metrics.rate, 0, 100);
+  const leftDays = state.settings.examDate ? Math.max(0, daysBetween(today, state.settings.examDate)) : null;
+  const leftText = leftDays === null ? "未设置目标日期" : `${leftDays} 天`;
+  const progressLabel = metrics.total ? `今日完成 ${metrics.done} / ${metrics.total}` : "今天还没有任务";
+  return `
+    <section class="today-card" aria-label="今日状态">
+      <div class="today-card-main">
+        <p class="meta goal-label">当前目标</p>
+        <h3>${escapeHTML(goalName(today))}</h3>
+        <div class="today-card-facts">
+          <span>距离目标 ${escapeHTML(leftText)}</span>
+          <span>${escapeHTML(progressLabel)}</span>
+        </div>
+        <div class="progress-track" aria-label="${escapeAttr(progressLabel)}">
+          <span style="width: ${progress}%"></span>
+        </div>
+      </div>
+      <button
+        class="primary today-action"
+        type="button"
+        data-action="home-next"
+        data-next-action="${escapeAttr(action.type)}"
+        ${action.taskId ? `data-task-id="${escapeAttr(action.taskId)}"` : ""}
+        ${action.disabled ? "disabled aria-disabled=\"true\"" : ""}
+      >
+        ${escapeHTML(action.label)}
+      </button>
+    </section>
+  `;
+}
+
+function renderSevenDayStrip(days, today) {
+  return `
+    <section class="week-strip" aria-label="最近七天行动记录">
+      ${days
+        .map((date) => {
+          const metrics = dayMetrics(date);
+          const hasRecord = hasDayRecord(date);
+          const rating = ratingClass(metrics.rating, hasRecord);
+          const selected = date === selectedDate;
+          const isToday = date === today;
+          return `
+            <button
+              type="button"
+              class="week-day rating-${rating} ${isToday ? "is-today" : ""} ${selected ? "is-selected" : ""}"
+              data-home-review-date="${escapeAttr(date)}"
+              title="${escapeAttr(`${date} · ${hasRecord ? metrics.rating : "无记录"}`)}"
+            >
+              <span>${escapeHTML(dateLabel(date, today))}</span>
+              <strong>${hasRecord ? escapeHTML(metrics.rating) : "未"}</strong>
+              <small>${Number(date.slice(5, 7))}/${Number(date.slice(8))}</small>
+            </button>
+          `;
+        })
+        .join("")}
     </section>
   `;
 }
@@ -1416,10 +1561,56 @@ function renderConfirm() {
   `;
 }
 
+function focusAfterRender(selector, options = {}) {
+  window.requestAnimationFrame(() => {
+    const element = document.querySelector(selector);
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (options.expandTaskId) {
+      uiState.expandedTaskId = options.expandTaskId;
+    }
+    if (options.focusSelector) {
+      element.querySelector(options.focusSelector)?.focus();
+    }
+  });
+}
+
+function runHomeNextAction(button) {
+  const action = button.dataset.nextAction;
+  const taskId = button.dataset.taskId;
+  if (action === "done") return;
+  currentView = "today";
+  if (action === "continue-task" && taskId) {
+    uiState.expandedTaskId = taskId;
+    render();
+    focusAfterRender(`[data-task-id="${CSS.escape(taskId)}"]`);
+    return;
+  }
+  render();
+  if (action === "complete-review") {
+    focusAfterRender("[data-today-record-form]");
+    return;
+  }
+  focusAfterRender("[data-task-form]", { focusSelector: "[name='name']" });
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       currentView = button.dataset.view;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-action='home-next']").forEach((button) => {
+    button.addEventListener("click", () => runHomeNextAction(button));
+  });
+
+  document.querySelectorAll("[data-home-review-date]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedDate = button.dataset.homeReviewDate || selectedDate;
+      reviewCalendarMonth = selectedDate.slice(0, 7);
+      currentView = "review";
       render();
     });
   });

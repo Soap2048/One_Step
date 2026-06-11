@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "test": "node --test",
     "dev:tauri": "tauri dev",
     "build": "vite build",
     "build:tauri": "tauri build",
